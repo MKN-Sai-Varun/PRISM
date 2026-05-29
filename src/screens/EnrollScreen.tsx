@@ -8,17 +8,65 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors } from '../utils/colors';
+import { loadFaceDetector, detectFace, FaceBox } from '../ml/faceDetector';
 
 export default function EnrollScreen({ navigation }: any) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
+  const [faceBox, setFaceBox] = useState<FaceBox | null>(null);
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+  const detectionInterval = useRef<any>(null);
+
+  useEffect(() => {
+    loadFaceDetector().then(() => setIsModelReady(true));
+    return () => {
+      if (detectionInterval.current) clearInterval(detectionInterval.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (permission && !permission.granted) {
       requestPermission();
     }
   }, [permission]);
+
+  const startDetection = () => {
+    if (!isModelReady) {
+      Alert.alert('Please wait', 'Model is still loading...');
+      return;
+    }
+    setIsDetecting(true);
+    detectionInterval.current = setInterval(async () => {
+      if (!cameraRef.current) return;
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          base64: true,
+          quality: 0.1,
+          skipProcessing: true,
+        });
+        if (!photo?.base64) return;
+
+        // Decode base64 to pixel data
+        const binary = atob(photo.base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+
+        const box = await detectFace(bytes, photo.width, photo.height);
+        setFaceBox(box);
+      } catch (e) {
+        console.log('Detection error:', e);
+      }
+    }, 500);
+  };
+
+  const stopDetection = () => {
+    setIsDetecting(false);
+    if (detectionInterval.current) clearInterval(detectionInterval.current);
+  };
 
   if (!permission) {
     return (
@@ -46,11 +94,17 @@ export default function EnrollScreen({ navigation }: any) {
         style={styles.camera}
         facing={facing}
       >
-        {/* Face overlay box */}
         <View style={styles.overlay}>
-          <View style={styles.faceBox} />
+          <View style={[
+            styles.faceBox,
+            faceBox && { borderColor: colors.success },
+            !faceBox && isDetecting && { borderColor: colors.warning },
+          ]} />
           <Text style={styles.instruction}>
-            Position your face in the box
+            {!isModelReady && '⏳ Loading model...'}
+            {isModelReady && !isDetecting && '👆 Tap detect to start'}
+            {isDetecting && faceBox && `✅ Face detected (${Math.round(faceBox.confidence * 100)}%)`}
+            {isDetecting && !faceBox && '🔍 Looking for face...'}
           </Text>
         </View>
       </CameraView>
@@ -60,14 +114,14 @@ export default function EnrollScreen({ navigation }: any) {
           style={styles.flipButton}
           onPress={() => setFacing(f => f === 'front' ? 'back' : 'front')}
         >
-          <Text style={styles.buttonText}>🔄 Flip</Text>
+          <Text style={styles.buttonText}>🔄</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.captureButton}
-          onPress={() => Alert.alert('Coming Soon', 'ML enrollment coming next!')}
+          style={[styles.captureButton, isDetecting && { backgroundColor: colors.danger }]}
+          onPress={isDetecting ? stopDetection : startDetection}
         >
-          <Text style={styles.captureText}>📸</Text>
+          <Text style={styles.captureText}>{isDetecting ? '⏹' : '▶️'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -85,8 +139,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.dark,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   camera: {
     flex: 1,

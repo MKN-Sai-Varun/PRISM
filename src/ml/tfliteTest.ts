@@ -1,13 +1,10 @@
-import { loadTensorflowModel } from 'react-native-fast-tflite';
+import { loadFaceDetector } from './faceDetector';
 
 export async function testTFLite(): Promise<string> {
   try {
-    const model = await loadTensorflowModel(
-      require('../../assets/models/blaze_face_short_range.tflite'),
-      []
-    );
-    return 'TFLite working ✅ BlazeFace loaded';
+    await loadFaceDetector();
+    return 'BlazeFace loaded ✅ Ready for detection';
   } catch (e: any) {
-    return `TFLite failed ❌: ${e.message}`;
+    return `Failed ❌: ${e.message}`;
   }
 }
