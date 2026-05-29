@@ -6,6 +6,7 @@ import {
   StyleSheet,
   StatusBar,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { colors } from '../utils/colors';
 import { useAppStore } from '../store/appStore';
@@ -63,6 +64,16 @@ export default function HomeScreen({ navigation }: any) {
         >
           <Text style={styles.buttonText}>📋  Attendance Logs</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.warning }]}
+            onPress={async () => {
+            const { testTFLite } = await import('../ml/tfliteTest');
+            const result = await testTFLite();
+            Alert.alert('TFLite Test', result);
+          }}
+        >
+  <Text style={styles.buttonText}>🧪 Test TFLite</Text>
+</TouchableOpacity>
       </View>
 
       <Text style={styles.footer}>
