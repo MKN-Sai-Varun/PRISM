@@ -2,6 +2,11 @@
   "expo": {
     "name": "PRISM",
     "slug": "PRISM",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "1092aa6b-61cf-4e15-9d2b-b68554bbcdc3"
+      }
+    }
   }
 }

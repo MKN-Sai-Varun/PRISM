@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator } from '@react-navigation/stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useAppStore } from './src/store/appStore';
 import { colors } from './src/utils/colors';
@@ -9,8 +9,7 @@ import EnrollScreen from './src/screens/EnrollScreen';
 import VerifyScreen from './src/screens/VerifyScreen';
 import LogsScreen from './src/screens/LogsScreen';
 
-const Stack = createNativeStackNavigator();
-
+const Stack = createStackNavigator();
 export default function App() {
   const setOnline = useAppStore((s) => s.setOnline);
 
