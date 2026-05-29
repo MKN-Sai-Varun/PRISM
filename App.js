@@ -1,16 +1,14 @@
-import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useAppStore } from './src/store/appStore';
-import { colors } from './src/utils/colors';
 import HomeScreen from './src/screens/HomeScreen';
 import EnrollScreen from './src/screens/EnrollScreen';
 import VerifyScreen from './src/screens/VerifyScreen';
 import LogsScreen from './src/screens/LogsScreen';
 
-const Stack = createStackNavigator();
 export default function App() {
+  const [currentScreen, setCurrentScreen] = useState('Home');
   const setOnline = useAppStore((s) => s.setOnline);
 
   useEffect(() => {
@@ -20,21 +18,21 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  const navigate = (screen) => setCurrentScreen(screen);
+  const goBack = () => setCurrentScreen('Home');
+
+  const navigation = { navigate, goBack };
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: '700' },
-          contentStyle: { backgroundColor: colors.dark },
-        }}
-      >
-        <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Enroll" component={EnrollScreen} options={{ title: 'Enroll Person' }} />
-        <Stack.Screen name="Verify" component={VerifyScreen} options={{ title: 'Verify Identity' }} />
-        <Stack.Screen name="Logs" component={LogsScreen} options={{ title: 'Attendance Logs' }} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <View style={styles.container}>
+      {currentScreen === 'Home' && <HomeScreen navigation={navigation} />}
+      {currentScreen === 'Enroll' && <EnrollScreen navigation={navigation} />}
+      {currentScreen === 'Verify' && <VerifyScreen navigation={navigation} />}
+      {currentScreen === 'Logs' && <LogsScreen navigation={navigation} />}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+});
