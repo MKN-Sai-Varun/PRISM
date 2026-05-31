@@ -14,6 +14,7 @@ import { loadFaceEmbedding, getEmbedding } from '../ml/faceEmbedding';
 import { runFusionMatch } from '../ml/fusionMatcher';
 import { getAllUsers, logAttendance, initDB } from '../db/sqlite';
 import { useAppStore } from '../store/appStore';
+import { checkLiveness } from '../ml/livenessDetector';
 
 export default function VerifyScreen({ navigation }: any) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -65,7 +66,17 @@ export default function VerifyScreen({ navigation }: any) {
         setIsProcessing(false);
         return;
       }
+      // Check liveness first
+      const { checkLiveness } = await import('../ml/livenessDetector');
+      const liveness = await checkLiveness(photo.uri);
+      console.log('Liveness result:', liveness);
 
+      if (!liveness.isLive) {
+        setStatus('failed');
+        setResultName(`Spoof detected: ${liveness.reason}`);
+        setIsProcessing(false);
+        return;
+      }
       // Get embedding
       const embedding = await getEmbedding(photo.uri);
       if (!embedding) {
