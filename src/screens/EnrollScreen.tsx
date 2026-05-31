@@ -32,41 +32,41 @@ export default function EnrollScreen({ navigation }: any) {
     }
   }, [permission]);
 
-  const startDetection = () => {
-    if (!isModelReady) {
-      Alert.alert('Please wait', 'Model is still loading...');
+  const isProcessing = useRef(false);
+
+  const captureAndDetect = async () => {
+  if (!isModelReady) {
+    Alert.alert('Please wait', 'Model is still loading...');
+    return;
+  }
+  if (!cameraRef.current) return;
+  
+  setIsDetecting(true);
+  try {
+    const photo = await cameraRef.current.takePictureAsync({
+      quality: 0.5,
+      skipProcessing: false,
+    });
+    
+    if (!photo?.uri) {
+      Alert.alert('Error', 'Could not capture image');
       return;
     }
-    setIsDetecting(true);
-    detectionInterval.current = setInterval(async () => {
-      if (!cameraRef.current) return;
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          base64: true,
-          quality: 0.1,
-          skipProcessing: true,
-        });
-        if (!photo?.base64) return;
 
-        // Decode base64 to pixel data
-        const binary = atob(photo.base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-
-        const box = await detectFace(bytes, photo.width, photo.height);
-        setFaceBox(box);
-      } catch (e) {
-        console.log('Detection error:', e);
-      }
-    }, 500);
-  };
-
-  const stopDetection = () => {
+    const box = await detectFace(photo.uri, photo.width, photo.height);
+    setFaceBox(box);
+    
+    if (box) {
+      Alert.alert('Face Detected! ✅', `Confidence: ${Math.round(box.confidence * 100)}%`);
+    } else {
+      Alert.alert('No face found', 'Please position your face in the box');
+    }
+  } catch (e: any) {
+    Alert.alert('Error', e.message);
+  } finally {
     setIsDetecting(false);
-    if (detectionInterval.current) clearInterval(detectionInterval.current);
-  };
+  }
+};
 
   if (!permission) {
     return (
@@ -118,11 +118,11 @@ export default function EnrollScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.captureButton, isDetecting && { backgroundColor: colors.danger }]}
-          onPress={isDetecting ? stopDetection : startDetection}
+          style={[styles.captureButton, isDetecting && { backgroundColor: colors.warning }]}
+          onPress={captureAndDetect}
         >
-          <Text style={styles.captureText}>{isDetecting ? '⏹' : '▶️'}</Text>
-        </TouchableOpacity>
+  <Text style={styles.captureText}>{isDetecting ? '⏳' : '📸'}</Text>
+</TouchableOpacity>
 
         <TouchableOpacity
           style={styles.flipButton}
