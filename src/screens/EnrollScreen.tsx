@@ -5,25 +5,35 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors } from '../utils/colors';
-import { loadFaceDetector, detectFace, FaceBox } from '../ml/faceDetector';
+import { loadFaceDetector, detectFace } from '../ml/faceDetector';
+import { loadFaceEmbedding, getEmbedding } from '../ml/faceEmbedding';
+import { enrollUser, initDB } from '../db/sqlite';
+import { useAppStore } from '../store/appStore';
 
 export default function EnrollScreen({ navigation }: any) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
-  const [faceBox, setFaceBox] = useState<FaceBox | null>(null);
   const [isModelReady, setIsModelReady] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [step, setStep] = useState<'details' | 'camera'>('details');
+  const [name, setName] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+  const [captureCount, setCaptureCount] = useState(0);
+  const [embeddings, setEmbeddings] = useState<number[][]>([]);
   const cameraRef = useRef<CameraView>(null);
-  const detectionInterval = useRef<any>(null);
+  const addUser = useAppStore((s) => s.addUser);
 
   useEffect(() => {
-    loadFaceDetector().then(() => setIsModelReady(true));
-    return () => {
-      if (detectionInterval.current) clearInterval(detectionInterval.current);
-    };
+    initDB();
+    Promise.all([loadFaceDetector(), loadFaceEmbedding()]).then(() => {
+      setIsModelReady(true);
+      console.log('Both models ready');
+    });
   }, []);
 
   useEffect(() => {
@@ -32,41 +42,83 @@ export default function EnrollScreen({ navigation }: any) {
     }
   }, [permission]);
 
-  const isProcessing = useRef(false);
-
-  const captureAndDetect = async () => {
-  if (!isModelReady) {
-    Alert.alert('Please wait', 'Model is still loading...');
-    return;
-  }
-  if (!cameraRef.current) return;
-  
-  setIsDetecting(true);
-  try {
-    const photo = await cameraRef.current.takePictureAsync({
-      quality: 0.5,
-      skipProcessing: false,
-    });
-    
-    if (!photo?.uri) {
-      Alert.alert('Error', 'Could not capture image');
+  const captureAndEmbed = async () => {
+    if (!isModelReady) {
+      Alert.alert('Please wait', 'Models are still loading...');
       return;
     }
+    if (!cameraRef.current) return;
 
-    const box = await detectFace(photo.uri, photo.width, photo.height);
-    setFaceBox(box);
-    
-    if (box) {
-      Alert.alert('Face Detected! ✅', `Confidence: ${Math.round(box.confidence * 100)}%`);
-    } else {
-      Alert.alert('No face found', 'Please position your face in the box');
+    setIsProcessing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        skipProcessing: false,
+      });
+
+      if (!photo?.uri) return;
+
+      // Detect face first
+      const box = await detectFace(photo.uri, photo.width, photo.height);
+      if (!box) {
+        Alert.alert('No face detected', 'Please position your face clearly in the box');
+        return;
+      }
+
+      // Get embedding
+      const embedding = await getEmbedding(photo.uri);
+      if (!embedding) {
+        Alert.alert('Error', 'Could not generate face embedding');
+        return;
+      }
+
+      const newEmbeddings = [...embeddings, embedding];
+      setEmbeddings(newEmbeddings);
+      setCaptureCount(captureCount + 1);
+
+      if (newEmbeddings.length >= 3) {
+        // Average 3 embeddings for robustness
+        const avgEmbedding = newEmbeddings[0].map((_, i) =>
+          newEmbeddings.reduce((sum, e) => sum + e[i], 0) / newEmbeddings.length
+        );
+
+        // Save to SQLite
+        const userId = `user_${Date.now()}`;
+        await enrollUser(
+          userId,
+          name,
+          employeeId,
+          avgEmbedding,
+          [] // geo vector — coming Day 5
+        );
+
+        // Update store
+        addUser({
+          id: userId,
+          name,
+          employeeId,
+          rgbEmbedding: avgEmbedding,
+          geoVector: [],
+          enrolledAt: new Date().toISOString(),
+        });
+
+        Alert.alert(
+          '✅ Enrolled Successfully!',
+          `${name} has been enrolled with ${newEmbeddings.length} face captures.`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } else {
+        Alert.alert(
+          `Capture ${newEmbeddings.length}/3`,
+          `Good! ${3 - newEmbeddings.length} more capture(s) needed.`
+        );
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setIsProcessing(false);
     }
-  } catch (e: any) {
-    Alert.alert('Error', e.message);
-  } finally {
-    setIsDetecting(false);
-  }
-};
+  };
 
   if (!permission) {
     return (
@@ -87,6 +139,43 @@ export default function EnrollScreen({ navigation }: any) {
     );
   }
 
+  if (step === 'details') {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>👤 New Enrollment</Text>
+        <Text style={styles.subtitle}>Enter personnel details</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          placeholderTextColor={colors.textMuted}
+          value={name}
+          onChangeText={setName}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Employee ID"
+          placeholderTextColor={colors.textMuted}
+          value={employeeId}
+          onChangeText={setEmployeeId}
+        />
+
+        <TouchableOpacity
+          style={[styles.button, (!name || !employeeId) && { opacity: 0.5 }]}
+          disabled={!name || !employeeId}
+          onPress={() => setStep('camera')}
+        >
+          <Text style={styles.buttonText}>Continue to Camera →</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <CameraView
@@ -95,17 +184,23 @@ export default function EnrollScreen({ navigation }: any) {
         facing={facing}
       >
         <View style={styles.overlay}>
-          <View style={[
-            styles.faceBox,
-            faceBox && { borderColor: colors.success },
-            !faceBox && isDetecting && { borderColor: colors.warning },
-          ]} />
+          <View style={styles.faceBox} />
           <Text style={styles.instruction}>
-            {!isModelReady && '⏳ Loading model...'}
-            {isModelReady && !isDetecting && '👆 Tap detect to start'}
-            {isDetecting && faceBox && `✅ Face detected (${Math.round(faceBox.confidence * 100)}%)`}
-            {isDetecting && !faceBox && '🔍 Looking for face...'}
+            {!isModelReady && '⏳ Loading models...'}
+            {isModelReady && !isProcessing && `📸 Capture ${captureCount + 1}/3 — Look straight ahead`}
+            {isProcessing && '⏳ Processing...'}
           </Text>
+          <View style={styles.progressRow}>
+            {[0, 1, 2].map(i => (
+              <View
+                key={i}
+                style={[
+                  styles.progressDot,
+                  i < captureCount && { backgroundColor: colors.success }
+                ]}
+              />
+            ))}
+          </View>
         </View>
       </CameraView>
 
@@ -118,11 +213,15 @@ export default function EnrollScreen({ navigation }: any) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.captureButton, isDetecting && { backgroundColor: colors.warning }]}
-          onPress={captureAndDetect}
+          style={[styles.captureButton, isProcessing && { backgroundColor: colors.warning }]}
+          onPress={captureAndEmbed}
+          disabled={isProcessing}
         >
-  <Text style={styles.captureText}>{isDetecting ? '⏳' : '📸'}</Text>
-</TouchableOpacity>
+          {isProcessing
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.captureText}>📸</Text>
+          }
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.flipButton}
@@ -139,6 +238,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.dark,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    marginBottom: 30,
+  },
+  input: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   camera: {
     flex: 1,
@@ -164,6 +288,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     padding: 8,
     borderRadius: 8,
+    textAlign: 'center',
+  },
+  progressRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  progressDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   controls: {
     flexDirection: 'row',
@@ -190,15 +328,22 @@ const styles = StyleSheet.create({
     fontSize: 30,
   },
   button: {
-    marginTop: 20,
-    padding: 14,
+    width: '100%',
     backgroundColor: colors.primary,
-    borderRadius: 10,
+    borderRadius: 14,
+    padding: 18,
+    alignItems: 'center',
+    marginTop: 8,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  backText: {
+    color: colors.primary,
+    marginTop: 20,
+    fontSize: 16,
   },
   text: {
     color: colors.text,
