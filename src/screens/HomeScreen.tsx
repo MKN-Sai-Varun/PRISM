@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import {
 import { colors } from '../utils/colors';
 import { useAppStore } from '../store/appStore';
 import { syncAttendance, startAutoSync } from '../sync/awsSync';
-import  { useRef } from 'react';
 
 export default function HomeScreen({ navigation }: any) {
   const { enrolledUsers, attendanceLogs, isOnline } = useAppStore();

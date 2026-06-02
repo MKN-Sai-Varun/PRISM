@@ -14,16 +14,25 @@ import { loadFaceEmbedding, getEmbedding } from '../ml/faceEmbedding';
 import { runFusionMatch } from '../ml/fusionMatcher';
 import { getAllUsers, logAttendance, initDB } from '../db/sqlite';
 import { useAppStore } from '../store/appStore';
-import { checkLiveness } from '../ml/livenessDetector';
+import {
+  checkLiveness,
+  checkActiveLiveness,
+  randomChallenge,
+  challengePrompt,
+  LivenessChallenge,
+} from '../ml/livenessDetector';
 
 export default function VerifyScreen({ navigation }: any) {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [isModelReady, setIsModelReady] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'matched' | 'failed'>('idle');
+  const [status, setStatus] = useState<'idle' | 'challenge' | 'scanning' | 'matched' | 'failed'>('idle');
   const [resultName, setResultName] = useState('');
   const [confidence, setConfidence] = useState(0);
+  const [challenge, setChallenge] = useState<LivenessChallenge>('blink');
+  const [challengeCountdown, setChallengeCountdown] = useState(3);
+  const beforePhotoUri = useRef<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const addLog = useAppStore((s) => s.addLog);
 
@@ -40,17 +49,50 @@ export default function VerifyScreen({ navigation }: any) {
     }
   }, [permission]);
 
-  const verifyFace = async () => {
+  // Step 1 — Start challenge: take "before" photo, show prompt, wait, take "after" photo
+  const startChallenge = async () => {
     if (!isModelReady) {
       Alert.alert('Please wait', 'Models are still loading...');
       return;
     }
     if (!cameraRef.current) return;
 
+    const newChallenge = randomChallenge();
+    setChallenge(newChallenge);
+    setStatus('challenge');
+    setChallengeCountdown(3);
+
+    // Capture the "before" frame immediately
+    try {
+      const before = await cameraRef.current.takePictureAsync({
+        quality: 0.6,
+        skipProcessing: false,
+      });
+      beforePhotoUri.current = before?.uri ?? null;
+    } catch {
+      beforePhotoUri.current = null;
+    }
+
+    // Countdown 3 → 2 → 1 while user performs the action
+    for (let i = 2; i >= 1; i--) {
+      await new Promise(r => setTimeout(r, 1000));
+      setChallengeCountdown(i);
+    }
+    await new Promise(r => setTimeout(r, 1000));
+
+    // Now run the full verify pipeline with the "after" photo
+    await verifyFace();
+  };
+
+  // Step 2 — Full verify pipeline (runs after challenge countdown)
+  const verifyFace = async () => {
+    if (!cameraRef.current) return;
+
     setIsProcessing(true);
     setStatus('scanning');
 
     try {
+      // Capture "after" photo
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         skipProcessing: false,
@@ -58,7 +100,34 @@ export default function VerifyScreen({ navigation }: any) {
 
       if (!photo?.uri) return;
 
-      // Detect face
+      // ── Passive liveness (single frame texture check) ──────────────────
+      const passiveLiveness = await checkLiveness(photo.uri);
+      console.log('Passive liveness:', passiveLiveness);
+
+      if (!passiveLiveness.isLive) {
+        setStatus('failed');
+        setResultName(`Spoof: ${passiveLiveness.reason}`);
+        setIsProcessing(false);
+        return;
+      }
+
+      // ── Active liveness (before vs after frame delta) ───────────────────
+      if (beforePhotoUri.current) {
+        const activeLiveness = await checkActiveLiveness(
+          beforePhotoUri.current,
+          photo.uri,
+        );
+        console.log('Active liveness:', activeLiveness);
+
+        if (!activeLiveness.isLive) {
+          setStatus('failed');
+          setResultName('No motion detected — spoof suspected');
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      // ── Face detection ──────────────────────────────────────────────────
       const box = await detectFace(photo.uri, photo.width, photo.height);
       if (!box) {
         setStatus('failed');
@@ -66,18 +135,8 @@ export default function VerifyScreen({ navigation }: any) {
         setIsProcessing(false);
         return;
       }
-      // Check liveness first
-      const { checkLiveness } = await import('../ml/livenessDetector');
-      const liveness = await checkLiveness(photo.uri);
-      console.log('Liveness result:', liveness);
 
-      if (!liveness.isLive) {
-        setStatus('failed');
-        setResultName(`Spoof detected: ${liveness.reason}`);
-        setIsProcessing(false);
-        return;
-      }
-      // Get embedding
+      // ── Embedding ───────────────────────────────────────────────────────
       const embedding = await getEmbedding(photo.uri);
       if (!embedding) {
         setStatus('failed');
@@ -86,7 +145,7 @@ export default function VerifyScreen({ navigation }: any) {
         return;
       }
 
-      // Load all enrolled users
+      // ── Fusion match ────────────────────────────────────────────────────
       const users = await getAllUsers();
       if (users.length === 0) {
         Alert.alert('No users enrolled', 'Please enroll someone first');
@@ -95,25 +154,15 @@ export default function VerifyScreen({ navigation }: any) {
         return;
       }
 
-      // Run fusion match
       const result = runFusionMatch(embedding, users);
-
       setConfidence(result.confidence);
 
       if (result.matched && result.userName && result.userId) {
         setStatus('matched');
         setResultName(result.userName);
 
-        // Log attendance
         const logId = `log_${Date.now()}`;
-        await logAttendance(
-          logId,
-          result.userId,
-          result.userName,
-          result.confidence,
-          result.channel
-        );
-
+        await logAttendance(logId, result.userId, result.userName, result.confidence, result.channel);
         addLog({
           id: logId,
           userId: result.userId,
@@ -132,6 +181,7 @@ export default function VerifyScreen({ navigation }: any) {
       setStatus('idle');
     } finally {
       setIsProcessing(false);
+      beforePhotoUri.current = null;
     }
   };
 
@@ -139,6 +189,7 @@ export default function VerifyScreen({ navigation }: any) {
     setStatus('idle');
     setResultName('');
     setConfidence(0);
+    beforePhotoUri.current = null;
   };
 
   if (!permission) {
@@ -181,6 +232,16 @@ export default function VerifyScreen({ navigation }: any) {
                 {isModelReady ? '👤 Position your face' : '⏳ Loading models...'}
               </Text>
             )}
+            {status === 'challenge' && (
+              <View style={{ alignItems: 'center' }}>
+                <Text style={[styles.statusText, { color: colors.warning, fontSize: 18 }]}>
+                  {challengePrompt(challenge)}
+                </Text>
+                <Text style={[styles.statusText, { fontSize: 32, marginTop: 8 }]}>
+                  {challengeCountdown}
+                </Text>
+              </View>
+            )}
             {status === 'scanning' && (
               <Text style={styles.statusText}>🔍 Scanning...</Text>
             )}
@@ -209,11 +270,11 @@ export default function VerifyScreen({ navigation }: any) {
           <Text style={styles.buttonText}>🔄</Text>
         </TouchableOpacity>
 
-        {status === 'idle' || status === 'scanning' ? (
+        {status === 'idle' || status === 'scanning' || status === 'challenge' ? (
           <TouchableOpacity
-            style={[styles.scanButton, isProcessing && { backgroundColor: colors.warning }]}
-            onPress={verifyFace}
-            disabled={isProcessing}
+            style={[styles.scanButton, (isProcessing || status === 'challenge') && { backgroundColor: colors.warning }]}
+            onPress={startChallenge}
+            disabled={isProcessing || status === 'challenge' || status === 'scanning'}
           >
             {isProcessing
               ? <ActivityIndicator color="#fff" />

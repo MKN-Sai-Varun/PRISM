@@ -10,9 +10,7 @@ export async function loadFaceEmbedding(): Promise<void> {
     require('../../assets/models/mobilefacenet.tflite'),
     []
   );
-  console.log('MobileFaceNet loaded');
-  console.log('Inputs:', JSON.stringify(faceNetModel.inputs));
-  console.log('Outputs:', JSON.stringify(faceNetModel.outputs));
+  // Model loaded — inputs: [1,112,112,3], outputs: embedding [1,192]
 }
 
 export async function getEmbedding(photoUri: string): Promise<number[] | null> {
@@ -56,7 +54,6 @@ export async function getEmbedding(photoUri: string): Promise<number[] | null> {
 
   // @ts-ignore
   const embedding = new Float32Array(outputs[0]);
-  console.log('Embedding length:', embedding.length);
 
   // Normalize embedding to unit vector
   let norm = 0;

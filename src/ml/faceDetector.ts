@@ -18,9 +18,7 @@ export async function loadFaceDetector(): Promise<void> {
     require('../../assets/models/blaze_face_short_range.tflite'),
     []
   );
-  console.log('BlazeFace loaded');
-  console.log('Inputs:', JSON.stringify(blazefaceModel.inputs));
-  console.log('Outputs:', JSON.stringify(blazefaceModel.outputs));
+  // Model loaded — inputs: [1,128,128,3], outputs: regressors [1,896,16] + classifiers [1,896,1]
 }
 
 export async function detectFace(
@@ -48,7 +46,6 @@ export async function detectFace(
 
   // Decode JPEG to raw RGBA pixels
   const rawImageData = jpeg.decode(jpegBytes, { useTArray: true });
-  console.log('Decoded pixels:', rawImageData.width, 'x', rawImageData.height);
 
   // Convert RGBA to RGB float32 normalized to [-1, 1]
   const inputData = new Float32Array(128 * 128 * 3);
@@ -60,13 +57,10 @@ export async function detectFace(
     inputData[rgbIdx + 2] = (rawImageData.data[rgbaIdx + 2] / 127.5) - 1.0; // B
   }
 
-  console.log('Running inference...');
-
   let outputs;
   try {
     // @ts-ignore
     outputs = blazefaceModel!.runSync([inputData.buffer]);
-    console.log('Inference complete');
   } catch (e: any) {
     console.log('Inference error:', e.message);
     return null;
@@ -76,9 +70,6 @@ export async function detectFace(
   const regressors = new Float32Array(outputs[0]);
   // @ts-ignore
   const classifiers = new Float32Array(outputs[1]);
-
-  console.log('Regressors length:', regressors.length);
-  console.log('Classifiers length:', classifiers.length);
 
   let bestScore = -1;
   let bestIdx = -1;
@@ -90,8 +81,6 @@ export async function detectFace(
       bestIdx = i;
     }
   }
-
-  console.log('Best score:', bestScore);
 
   if (bestScore < 0.5) return null;
 

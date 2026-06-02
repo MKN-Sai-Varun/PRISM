@@ -83,6 +83,9 @@ export async function syncAttendance(): Promise<SyncResult> {
     // Mark synced records
     if (syncedIds.length > 0) {
       await markSynced(syncedIds);
+      // Update store
+      const { useAppStore } = await import('../store/appStore');
+      useAppStore.getState().markLogsSynced(syncedIds);
       console.log(`Marked ${syncedIds.length} records as synced`);
     }
 

@@ -26,6 +26,7 @@ interface AppState {
   isOnline: boolean;
   addUser: (user: EnrolledUser) => void;
   addLog: (log: AttendanceLog) => void;
+  markLogsSynced: (ids: string[]) => void;
   setOnline: (status: boolean) => void;
   setSyncing: (status: boolean) => void;
 }
@@ -39,6 +40,12 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({ enrolledUsers: [...state.enrolledUsers, user] })),
   addLog: (log) =>
     set((state) => ({ attendanceLogs: [...state.attendanceLogs, log] })),
+  markLogsSynced: (ids) =>
+    set((state) => ({
+      attendanceLogs: state.attendanceLogs.map((log) =>
+        ids.includes(log.id) ? { ...log, synced: true } : log
+      ),
+    })),
   setOnline: (status) => set({ isOnline: status }),
   setSyncing: (status) => set({ isSyncing: status }),
 }));
