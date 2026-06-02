@@ -3,14 +3,28 @@
     "name": "PRISM",
     "slug": "PRISM",
     "version": "1.0.0",
+    "platforms": ["android", "ios"],
+    "android": {
+      "package": "com.prism.faceauth",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PRISM needs camera access to scan and verify faces."
+        }
+      ]
+    ],
+    "assetBundlePatterns": [
+      "assets/models/*"
+    ],
     "extra": {
       "eas": {
         "projectId": "1092aa6b-61cf-4e15-9d2b-b68554bbcdc3"
       }
-    },
-    "plugins": [
-      "expo-sqlite",
-      "expo-secure-store"
-    ]
+    }
   }
 }

@@ -38,9 +38,13 @@ export default function VerifyScreen({ navigation }: any) {
 
   useEffect(() => {
     initDB();
-    Promise.all([loadFaceDetector(), loadFaceEmbedding()]).then(() => {
-      setIsModelReady(true);
-    });
+    const timeout = setTimeout(() => {
+      if (!isModelReady) Alert.alert('Model Load Timeout', 'Models failed to load. Please restart the app.');
+    }, 15000);
+    Promise.all([loadFaceDetector(), loadFaceEmbedding()])
+      .then(() => { clearTimeout(timeout); setIsModelReady(true); })
+      .catch(e => { clearTimeout(timeout); Alert.alert('Model Error', e.message); });
+    return () => clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
