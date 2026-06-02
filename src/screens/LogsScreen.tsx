@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { colors } from '../utils/colors';
-import { getAllUsers, getUnsyncedLogs } from '../db/sqlite';
+import { getUnsyncedLogs } from '../db/sqlite';
 import { useAppStore } from '../store/appStore';
 
 export default function LogsScreen({ navigation }: any) {
@@ -20,12 +20,11 @@ export default function LogsScreen({ navigation }: any) {
 
   const loadLogs = async () => {
     setRefreshing(true);
-    // Merge store logs with unsynced db logs
-    const unsynced = await getUnsyncedLogs();
-    const merged = [...attendanceLogs].sort(
+    await getUnsyncedLogs(); // ensure db is initialised
+    const sorted = [...attendanceLogs].sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
-    setLogs(merged);
+    setLogs(sorted);
     setRefreshing(false);
   };
 

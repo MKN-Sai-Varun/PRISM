@@ -4,19 +4,19 @@ import * as jpeg from 'jpeg-js';
 
 let faceNetModel: TensorflowModel | null = null;
 
+// Inputs: [1,112,112,3]  Outputs: embedding [1,192]
 export async function loadFaceEmbedding(): Promise<void> {
   if (faceNetModel) return;
   faceNetModel = await loadTensorflowModel(
     require('../../assets/models/mobilefacenet.tflite'),
     []
   );
-  // Model loaded — inputs: [1,112,112,3], outputs: embedding [1,192]
 }
 
 export async function getEmbedding(photoUri: string): Promise<number[] | null> {
   if (!faceNetModel) await loadFaceEmbedding();
 
-  // MobileFaceNet expects 112x112 input
+  // MobileFaceNet requires 112×112 input
   const resized = await ImageManipulator.manipulateAsync(
     photoUri,
     [{ resize: { width: 112, height: 112 } }],
@@ -33,14 +33,14 @@ export async function getEmbedding(photoUri: string): Promise<number[] | null> {
 
   const rawImageData = jpeg.decode(jpegBytes, { useTArray: true });
 
-  // Normalize to [-1, 1]
+  // RGBA → RGB, normalise to [-1, 1]
   const inputData = new Float32Array(112 * 112 * 3);
   for (let i = 0; i < 112 * 112; i++) {
-    const rgbaIdx = i * 4;
-    const rgbIdx = i * 3;
-    inputData[rgbIdx]     = (rawImageData.data[rgbaIdx]     / 127.5) - 1.0;
-    inputData[rgbIdx + 1] = (rawImageData.data[rgbaIdx + 1] / 127.5) - 1.0;
-    inputData[rgbIdx + 2] = (rawImageData.data[rgbaIdx + 2] / 127.5) - 1.0;
+    const src = i * 4;
+    const dst = i * 3;
+    inputData[dst]     = (rawImageData.data[src]     / 127.5) - 1.0;
+    inputData[dst + 1] = (rawImageData.data[src + 1] / 127.5) - 1.0;
+    inputData[dst + 2] = (rawImageData.data[src + 2] / 127.5) - 1.0;
   }
 
   let outputs;
@@ -48,34 +48,26 @@ export async function getEmbedding(photoUri: string): Promise<number[] | null> {
     // @ts-ignore
     outputs = faceNetModel!.runSync([inputData.buffer]);
   } catch (e: any) {
-    console.log('Embedding error:', e.message);
     return null;
   }
 
   // @ts-ignore
   const embedding = new Float32Array(outputs[0]);
 
-  // Normalize embedding to unit vector
+  // L2-normalise to unit vector for cosine similarity
   let norm = 0;
-  for (let i = 0; i < embedding.length; i++) {
-    norm += embedding[i] * embedding[i];
-  }
+  for (let i = 0; i < embedding.length; i++) norm += embedding[i] * embedding[i];
   norm = Math.sqrt(norm);
 
-  const normalized = Array.from(embedding).map(v => v / norm);
-  return normalized;
+  return Array.from(embedding).map(v => v / norm);
 }
 
 export function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-
+  let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
+    dot   += a[i] * b[i];
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }

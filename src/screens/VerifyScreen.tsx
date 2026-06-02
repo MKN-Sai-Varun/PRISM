@@ -217,12 +217,12 @@ export default function VerifyScreen({ navigation }: any) {
         ref={cameraRef}
         style={styles.camera}
         facing={facing}
-      >
-        <View style={styles.overlay}>
+      />
+      <View style={styles.overlay}>
           <View style={[
             styles.faceBox,
-            status === 'matched' && { borderColor: colors.success },
-            status === 'failed' && { borderColor: colors.danger },
+            status === 'matched'  && { borderColor: colors.success },
+            status === 'failed'   && { borderColor: colors.danger },
             status === 'scanning' && { borderColor: colors.warning },
           ]} />
 
@@ -260,7 +260,6 @@ export default function VerifyScreen({ navigation }: any) {
             )}
           </View>
         </View>
-      </CameraView>
 
       <View style={styles.controls}>
         <TouchableOpacity
@@ -313,7 +312,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },

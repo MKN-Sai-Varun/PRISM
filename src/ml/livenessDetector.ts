@@ -1,13 +1,9 @@
 /**
  * Liveness Detection — Passive + Active
  *
- * Passive: Single-frame texture & colour analysis (catches printed photos)
- * Active:  Two-frame delta comparison after a blink/smile challenge
+ * Passive  Single-frame texture & colour analysis (catches printed photos)
+ * Active   Two-frame delta comparison after a random challenge
  *          (catches screen replays and high-quality prints)
- *
- * The problem statement specifically requires:
- * "requiring the user to blink, smile, or turn their head slightly"
- * — Hackathon 7.0 spec, Mandatory Deliverables 1a
  */
 
 import * as jpeg from 'jpeg-js';
@@ -15,86 +11,49 @@ import * as ImageManipulator from 'expo-image-manipulator';
 
 export interface LivenessResult {
   isLive: boolean;
-  score: number;
+  score:  number;
   reason: string;
 }
 
-function computeTextureVariance(pixels: Uint8Array, width: number, height: number): number {
-  let variance = 0;
-  let count = 0;
+// ─── Passive helpers ──────────────────────────────────────────────────────────
 
+function computeTextureVariance(pixels: Uint8Array, width: number, height: number): number {
+  let variance = 0, count = 0;
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
-      const idx = (y * width + x) * 4;
+      const idx    = (y * width + x) * 4;
       const center = pixels[idx];
-
       const neighbors = [
-        pixels[((y-1) * width + (x-1)) * 4],
-        pixels[((y-1) * width + x) * 4],
-        pixels[((y-1) * width + (x+1)) * 4],
-        pixels[(y * width + (x+1)) * 4],
-        pixels[((y+1) * width + (x+1)) * 4],
-        pixels[((y+1) * width + x) * 4],
-        pixels[((y+1) * width + (x-1)) * 4],
-        pixels[(y * width + (x-1)) * 4],
+        pixels[((y-1) * width + (x-1)) * 4], pixels[((y-1) * width + x) * 4],
+        pixels[((y-1) * width + (x+1)) * 4], pixels[(y     * width + (x+1)) * 4],
+        pixels[((y+1) * width + (x+1)) * 4], pixels[((y+1) * width + x) * 4],
+        pixels[((y+1) * width + (x-1)) * 4], pixels[(y     * width + (x-1)) * 4],
       ];
-
-      const localVariance = neighbors.reduce((sum, n) => sum + Math.pow(n - center, 2), 0) / 8;
-      variance += localVariance;
+      variance += neighbors.reduce((s, n) => s + Math.pow(n - center, 2), 0) / 8;
       count++;
     }
   }
-
   return count > 0 ? variance / count : 0;
 }
 
-function computeSpecularScore(pixels: Uint8Array, width: number, height: number): number {
-  let brightPixels = 0;
-  const total = width * height;
-
-  for (let i = 0; i < total; i++) {
-    const idx = i * 4;
-    const r = pixels[idx];
-    const g = pixels[idx + 1];
-    const b = pixels[idx + 2];
-    const brightness = (r + g + b) / 3;
-    if (brightness > 220) brightPixels++;
-  }
-
-  return total > 0 ? brightPixels / total : 0;
-}
-
 function computeColorScore(pixels: Uint8Array, width: number, height: number): number {
-  let rSum = 0, gSum = 0, bSum = 0;
-  let rVar = 0, gVar = 0, bVar = 0;
   const total = width * height;
-
   if (total === 0) return 0;
-
+  let rSum = 0, gSum = 0, bSum = 0;
   for (let i = 0; i < total; i++) {
-    const idx = i * 4;
-    rSum += pixels[idx];
-    gSum += pixels[idx + 1];
-    bSum += pixels[idx + 2];
+    rSum += pixels[i * 4]; gSum += pixels[i * 4 + 1]; bSum += pixels[i * 4 + 2];
   }
-
-  const rMean = rSum / total;
-  const gMean = gSum / total;
-  const bMean = bSum / total;
-
+  const rMean = rSum / total, gMean = gSum / total, bMean = bSum / total;
+  let rVar = 0, gVar = 0, bVar = 0;
   for (let i = 0; i < total; i++) {
-    const idx = i * 4;
-    rVar += Math.pow(pixels[idx] - rMean, 2);
-    gVar += Math.pow(pixels[idx + 1] - gMean, 2);
-    bVar += Math.pow(pixels[idx + 2] - bMean, 2);
+    rVar += Math.pow(pixels[i * 4]     - rMean, 2);
+    gVar += Math.pow(pixels[i * 4 + 1] - gMean, 2);
+    bVar += Math.pow(pixels[i * 4 + 2] - bMean, 2);
   }
-
-  rVar /= total;
-  gVar /= total;
-  bVar /= total;
-
-  return (rVar + gVar + bVar) / 3;
+  return (rVar / total + gVar / total + bVar / total) / 3;
 }
+
+// ─── Passive check ────────────────────────────────────────────────────────────
 
 export async function checkLiveness(photoUri: string): Promise<LivenessResult> {
   try {
@@ -103,72 +62,46 @@ export async function checkLiveness(photoUri: string): Promise<LivenessResult> {
       [{ resize: { width: 64, height: 64 } }],
       { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 1.0 }
     );
+    if (!resized.base64) return { isLive: true, score: 0.5, reason: 'Check skipped' };
 
-    if (!resized.base64) {
-      return { isLive: true, score: 0.5, reason: 'Check skipped' };
-    }
+    const bin = atob(resized.base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 
-    const binary = atob(resized.base64);
-    const jpegBytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      jpegBytes[i] = binary.charCodeAt(i);
-    }
-
-    let rawImage;
+    let rawImage: { data: Uint8Array };
     try {
-      rawImage = jpeg.decode(jpegBytes, { useTArray: true });
-    } catch (e) {
-      console.log('JPEG decode failed:', e);
+      rawImage = jpeg.decode(bytes, { useTArray: true }) as { data: Uint8Array };
+    } catch {
       return { isLive: true, score: 0.5, reason: 'Check skipped' };
     }
 
-    const pixels = rawImage.data as Uint8Array;
-
+    const pixels         = rawImage.data;
     const textureVariance = computeTextureVariance(pixels, 64, 64);
-    const specularScore = computeSpecularScore(pixels, 64, 64);
-    const colorScore = computeColorScore(pixels, 64, 64);
-
-    console.log('Texture variance:', textureVariance);
-    console.log('Specular score:', specularScore);
-    console.log('Color score:', colorScore);
+    const colorScore      = computeColorScore(pixels, 64, 64);
 
     const textureOk = textureVariance > 200;
-    const colorOk = colorScore > 300;
+    const colorOk   = colorScore      > 300;
+    const isLive    = textureOk && colorOk;
 
-    const livenessScore = (
-      (textureVariance / 2000) * 0.5 +
-      (colorScore / 3000) * 0.3 +
-      specularScore * 0.2
+    const score = Math.min(1,
+      (textureVariance / 2000) * 0.6 +
+      (colorScore      / 3000) * 0.4
     );
 
-    const isLive = textureOk && colorOk;
-
-    let reason = '';
+    let reason = 'Live face confirmed';
     if (!textureOk) reason = 'Low texture — possible photo spoof';
-    else if (!colorOk) reason = 'Unusual color distribution';
-    else reason = 'Live face confirmed';
+    else if (!colorOk) reason = 'Unusual colour distribution';
 
-    return {
-      isLive,
-      score: Math.min(1, livenessScore),
-      reason,
-    };
-  } catch (e: any) {
-    console.log('Liveness error:', e.message);
+    return { isLive, score, reason };
+  } catch {
     return { isLive: true, score: 0.5, reason: 'Check skipped' };
   }
 }
 
-// ---------------------------------------------------------------------------
-// ACTIVE LIVENESS
-// ---------------------------------------------------------------------------
+// ─── Active challenge ─────────────────────────────────────────────────────────
 
 export type LivenessChallenge = 'blink' | 'smile' | 'turn';
 
-/**
- * Pick a random challenge to show the user.
- * Randomisation makes replay attacks harder.
- */
 export function randomChallenge(): LivenessChallenge {
   const options: LivenessChallenge[] = ['blink', 'smile', 'turn'];
   return options[Math.floor(Math.random() * options.length)];
@@ -183,21 +116,15 @@ export function challengePrompt(challenge: LivenessChallenge): string {
 }
 
 /**
- * Compare two frames captured before and after the challenge.
- *
- * A genuine user performing the action causes measurable pixel
- * changes in the face region. A static photo or screen replay
- * produces near-zero delta between frames.
- *
- * @param beforeUri  Photo taken when challenge is shown
- * @param afterUri   Photo taken ~2 seconds later
+ * Compares two frames taken before and after the challenge.
+ * A real user performing the action produces a mean pixel delta > 6.
+ * A static photo or screen replay stays near 0 (JPEG noise only).
  */
 export async function checkActiveLiveness(
   beforeUri: string,
   afterUri: string,
 ): Promise<LivenessResult> {
   try {
-    // Resize both to 64×64 for fast comparison
     const [before, after] = await Promise.all([
       ImageManipulator.manipulateAsync(
         beforeUri,
@@ -219,39 +146,25 @@ export async function checkActiveLiveness(
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      try {
-        return jpeg.decode(bytes, { useTArray: true }).data as Uint8Array;
-      } catch {
-        return bytes;
-      }
+      try { return (jpeg.decode(bytes, { useTArray: true }) as { data: Uint8Array }).data; }
+      catch { return bytes; }
     };
 
     const pixelsBefore = decode(before.base64);
     const pixelsAfter  = decode(after.base64);
+    const len          = Math.min(pixelsBefore.length, pixelsAfter.length);
 
-    // Mean absolute difference across all pixels
-    const len = Math.min(pixelsBefore.length, pixelsAfter.length);
     let totalDelta = 0;
-    for (let i = 0; i < len; i++) {
-      totalDelta += Math.abs(pixelsBefore[i] - pixelsAfter[i]);
-    }
+    for (let i = 0; i < len; i++) totalDelta += Math.abs(pixelsBefore[i] - pixelsAfter[i]);
     const meanDelta = totalDelta / len;
 
-    console.log('Active liveness mean delta:', meanDelta);
-
-    // A real blink / smile / head turn produces a delta > 8 on average.
-    // A static photo or screen shows delta < 3 (only JPEG compression noise).
     const isLive = meanDelta > 6;
-
     return {
       isLive,
-      score: Math.min(1, meanDelta / 30),
-      reason: isLive
-        ? 'Motion detected — live face confirmed'
-        : 'No motion detected — possible spoof',
+      score:  Math.min(1, meanDelta / 30),
+      reason: isLive ? 'Motion detected — live face confirmed' : 'No motion detected — possible spoof',
     };
-  } catch (e: any) {
-    console.log('Active liveness error:', e.message);
+  } catch {
     return { isLive: true, score: 0.5, reason: 'Active check skipped' };
   }
 }

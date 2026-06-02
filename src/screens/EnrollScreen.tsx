@@ -32,7 +32,6 @@ export default function EnrollScreen({ navigation }: any) {
     initDB();
     Promise.all([loadFaceDetector(), loadFaceEmbedding()]).then(() => {
       setIsModelReady(true);
-      console.log('Both models ready');
     });
   }, []);
 
@@ -84,13 +83,7 @@ export default function EnrollScreen({ navigation }: any) {
 
         // Save to SQLite
         const userId = `user_${Date.now()}`;
-        await enrollUser(
-          userId,
-          name,
-          employeeId,
-          avgEmbedding,
-          [] // geo vector — coming Day 5
-        );
+        await enrollUser(userId, name, employeeId, avgEmbedding, []);
 
         // Update store
         addUser({
@@ -182,27 +175,26 @@ export default function EnrollScreen({ navigation }: any) {
         ref={cameraRef}
         style={styles.camera}
         facing={facing}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.faceBox} />
-          <Text style={styles.instruction}>
-            {!isModelReady && '⏳ Loading models...'}
-            {isModelReady && !isProcessing && `📸 Capture ${captureCount + 1}/3 — Look straight ahead`}
-            {isProcessing && '⏳ Processing...'}
-          </Text>
-          <View style={styles.progressRow}>
-            {[0, 1, 2].map(i => (
-              <View
-                key={i}
-                style={[
-                  styles.progressDot,
-                  i < captureCount && { backgroundColor: colors.success }
-                ]}
-              />
-            ))}
-          </View>
+      />
+      <View style={styles.overlay}>
+        <View style={styles.faceBox} />
+        <Text style={styles.instruction}>
+          {!isModelReady && '⏳ Loading models...'}
+          {isModelReady && !isProcessing && `📸 Capture ${captureCount + 1}/3 — Look straight ahead`}
+          {isProcessing && '⏳ Processing...'}
+        </Text>
+        <View style={styles.progressRow}>
+          {[0, 1, 2].map(i => (
+            <View
+              key={i}
+              style={[
+                styles.progressDot,
+                i < captureCount && { backgroundColor: colors.success }
+              ]}
+            />
+          ))}
         </View>
-      </CameraView>
+      </View>
 
       <View style={styles.controls}>
         <TouchableOpacity
@@ -269,7 +261,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
   },
