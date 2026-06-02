@@ -1,6 +1,7 @@
 import { loadTensorflowModel, TensorflowModel } from 'react-native-fast-tflite';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as jpeg from 'jpeg-js';
+import { getBlazeFaceUri } from './modelLoader';
 
 let blazefaceModel: TensorflowModel | null = null;
 
@@ -12,12 +13,12 @@ export interface FaceBox {
   confidence: number;
 }
 
+// Inputs: [1,128,128,3]  Outputs: regressors [1,896,16], classifiers [1,896,1]
 export async function loadFaceDetector(): Promise<void> {
   if (blazefaceModel) return;
-  blazefaceModel = await loadTensorflowModel(
-    require('../../assets/models/blaze_face_short_range.tflite'),
-    []
-  );
+  const uri = await getBlazeFaceUri();
+  // @ts-ignore
+  blazefaceModel = await loadTensorflowModel({ url: uri }, []);
 }
 
 export async function detectFace(
@@ -43,6 +44,7 @@ export async function detectFace(
 
   const rawImageData = jpeg.decode(jpegBytes, { useTArray: true });
 
+  // RGBA → RGB, normalise to [-1, 1]
   const inputData = new Float32Array(128 * 128 * 3);
   for (let i = 0; i < 128 * 128; i++) {
     const src = i * 4;
@@ -54,12 +56,15 @@ export async function detectFace(
 
   let outputs;
   try {
+    // @ts-ignore
     outputs = blazefaceModel!.runSync([inputData.buffer]);
   } catch (e: any) {
     return null;
   }
 
+  // @ts-ignore
   const regressors  = new Float32Array(outputs[0]);
+  // @ts-ignore
   const classifiers = new Float32Array(outputs[1]);
 
   let bestScore = -1;

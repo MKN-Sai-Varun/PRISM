@@ -1,20 +1,22 @@
 import { loadTensorflowModel, TensorflowModel } from 'react-native-fast-tflite';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as jpeg from 'jpeg-js';
+import { getMobileFaceNetUri } from './modelLoader';
 
 let faceNetModel: TensorflowModel | null = null;
 
+// Inputs: [1,112,112,3]  Outputs: embedding [1,192]
 export async function loadFaceEmbedding(): Promise<void> {
   if (faceNetModel) return;
-  faceNetModel = await loadTensorflowModel(
-    require('../../assets/models/mobilefacenet.tflite'),
-    []
-  );
+  const uri = await getMobileFaceNetUri();
+  // @ts-ignore
+  faceNetModel = await loadTensorflowModel({ url: uri }, []);
 }
 
 export async function getEmbedding(photoUri: string): Promise<number[] | null> {
   if (!faceNetModel) await loadFaceEmbedding();
 
+  // MobileFaceNet requires 112×112 input
   const resized = await ImageManipulator.manipulateAsync(
     photoUri,
     [{ resize: { width: 112, height: 112 } }],
@@ -31,6 +33,7 @@ export async function getEmbedding(photoUri: string): Promise<number[] | null> {
 
   const rawImageData = jpeg.decode(jpegBytes, { useTArray: true });
 
+  // RGBA → RGB, normalise to [-1, 1]
   const inputData = new Float32Array(112 * 112 * 3);
   for (let i = 0; i < 112 * 112; i++) {
     const src = i * 4;
@@ -42,13 +45,16 @@ export async function getEmbedding(photoUri: string): Promise<number[] | null> {
 
   let outputs;
   try {
+    // @ts-ignore
     outputs = faceNetModel!.runSync([inputData.buffer]);
   } catch (e: any) {
     return null;
   }
 
+  // @ts-ignore
   const embedding = new Float32Array(outputs[0]);
 
+  // L2-normalise to unit vector for cosine similarity
   let norm = 0;
   for (let i = 0; i < embedding.length; i++) norm += embedding[i] * embedding[i];
   norm = Math.sqrt(norm);
