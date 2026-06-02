@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,35 @@ import {
 } from 'react-native';
 import { colors } from '../utils/colors';
 import { useAppStore } from '../store/appStore';
+import { syncAttendance, startAutoSync } from '../sync/awsSync';
+import  { useRef } from 'react';
 
 export default function HomeScreen({ navigation }: any) {
   const { enrolledUsers, attendanceLogs, isOnline } = useAppStore();
+
+  const hasSynced = useRef(false);
+
+  useEffect(() => {
+    const unsub = startAutoSync((result) => {
+      if (hasSynced.current) return;
+      hasSynced.current = true;
+      Alert.alert(
+        result.success ? '✅ Auto Sync Complete' : '❌ Auto Sync Failed',
+        result.message
+      );
+      setTimeout(() => { hasSynced.current = false; }, 5000);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleSync = async () => {
+    Alert.alert('Syncing...', 'Please wait');
+    const result = await syncAttendance();
+    Alert.alert(
+      result.success ? '✅ Sync Complete' : '❌ Sync Failed',
+      result.message
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -48,32 +74,29 @@ export default function HomeScreen({ navigation }: any) {
           style={[styles.button, { backgroundColor: colors.primary }]}
           onPress={() => navigation.navigate('Enroll')}
         >
-          <Text style={styles.buttonText}>➕  Enroll New Person</Text>
+          <Text style={styles.buttonText}>➕ Enroll New Person</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, { backgroundColor: colors.success }]}
           onPress={() => navigation.navigate('Verify')}
         >
-          <Text style={styles.buttonText}>✅  Verify Identity</Text>
+          <Text style={styles.buttonText}>✅ Verify Identity</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, { backgroundColor: colors.surfaceLight }]}
           onPress={() => navigation.navigate('Logs')}
         >
-          <Text style={styles.buttonText}>📋  Attendance Logs</Text>
+          <Text style={styles.buttonText}>📋 Attendance Logs</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.warning }]}
-            onPress={async () => {
-            const { testTFLite } = await import('../ml/tfliteTest');
-            const result = await testTFLite();
-            Alert.alert('TFLite Test', result);
-          }}
+          style={[styles.button, { backgroundColor: colors.warning }]}
+          onPress={handleSync}
         >
-  <Text style={styles.buttonText}>🧪 Test TFLite</Text>
-</TouchableOpacity>
+          <Text style={styles.buttonText}>🔄 Sync Logs</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.footer}>
