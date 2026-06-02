@@ -1,17 +1,3 @@
-/**
- * ABM Fusion Matcher — Adaptive Biometric Mesh
- *
- * Dynamically weights the RGB photometric channel against the geometric
- * channel based on ambient lighting. In poor lighting conditions face
- * texture is unreliable, so weight shifts toward lighting-invariant
- * geometric ratios (jaw width, eye spacing, etc.).
- *
- * Brightness  | RGB weight | Geo weight
- * ----------- | ---------- | ----------
- * Good (40–180)|   0.75    |   0.25
- * Bad (<40/>180)|  0.30    |   0.70
- */
-
 import { cosineSimilarity } from './faceEmbedding';
 
 export interface MatchResult {

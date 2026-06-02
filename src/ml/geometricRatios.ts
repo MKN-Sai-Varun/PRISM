@@ -1,11 +1,3 @@
-/**
- * Geometric Ratios — lighting-invariant identity vector
- *
- * Computes 12 normalised facial ratios from 468 MediaPipe Face Mesh
- * landmarks. Because these are ratios of distances, they are scale,
- * rotation, and lighting invariant — the core of the ABM approach.
- */
-
 export interface Point3D { x: number; y: number; z: number; }
 
 export interface GeoVector {
@@ -27,7 +19,6 @@ function dist(a: Point3D, b: Point3D): number {
   return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2 + (a.z-b.z)**2);
 }
 
-// Eye Aspect Ratio — EAR = (|p2-p6| + |p3-p5|) / (2 * |p1-p4|)
 function ear(lm: Point3D[], idx: number[]): number {
   return (dist(lm[idx[1]], lm[idx[5]]) + dist(lm[idx[2]], lm[idx[4]]))
        / (2 * dist(lm[idx[0]], lm[idx[3]]));

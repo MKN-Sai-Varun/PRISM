@@ -1,11 +1,3 @@
-/**
- * Liveness Detection — Passive + Active
- *
- * Passive  Single-frame texture & colour analysis (catches printed photos)
- * Active   Two-frame delta comparison after a random challenge
- *          (catches screen replays and high-quality prints)
- */
-
 import * as jpeg from 'jpeg-js';
 import * as ImageManipulator from 'expo-image-manipulator';
 
@@ -15,7 +7,6 @@ export interface LivenessResult {
   reason: string;
 }
 
-// ─── Passive helpers ──────────────────────────────────────────────────────────
 
 function computeTextureVariance(pixels: Uint8Array, width: number, height: number): number {
   let variance = 0, count = 0;
@@ -53,7 +44,6 @@ function computeColorScore(pixels: Uint8Array, width: number, height: number): n
   return (rVar / total + gVar / total + bVar / total) / 3;
 }
 
-// ─── Passive check ────────────────────────────────────────────────────────────
 
 export async function checkLiveness(photoUri: string): Promise<LivenessResult> {
   try {
@@ -98,7 +88,6 @@ export async function checkLiveness(photoUri: string): Promise<LivenessResult> {
   }
 }
 
-// ─── Active challenge ─────────────────────────────────────────────────────────
 
 export type LivenessChallenge = 'blink' | 'smile' | 'turn';
 
@@ -115,11 +104,6 @@ export function challengePrompt(challenge: LivenessChallenge): string {
   }
 }
 
-/**
- * Compares two frames taken before and after the challenge.
- * A real user performing the action produces a mean pixel delta > 6.
- * A static photo or screen replay stays near 0 (JPEG noise only).
- */
 export async function checkActiveLiveness(
   beforeUri: string,
   afterUri: string,

@@ -62,16 +62,21 @@ export default function VerifyScreen({ navigation }: any) {
     setStatus('challenge');
     setChallengeCountdown(3);
 
-    // Capture the "before" frame immediately
+    // Wait a beat before capturing the "before" frame so the camera is ready
+    await new Promise(r => setTimeout(r, 500));
+
     try {
       const before = await cameraRef.current.takePictureAsync({
         quality: 0.6,
-        skipProcessing: false,
+        skipProcessing: true,
       });
       beforePhotoUri.current = before?.uri ?? null;
     } catch {
       beforePhotoUri.current = null;
     }
+
+    // Give the camera time to reset before the countdown
+    await new Promise(r => setTimeout(r, 500));
 
     // Countdown 3 → 2 → 1 while user performs the action
     for (let i = 2; i >= 1; i--) {
@@ -80,7 +85,9 @@ export default function VerifyScreen({ navigation }: any) {
     }
     await new Promise(r => setTimeout(r, 1000));
 
-    // Now run the full verify pipeline with the "after" photo
+    // Camera needs a moment to be ready again before the "after" capture
+    await new Promise(r => setTimeout(r, 400));
+
     await verifyFace();
   };
 
@@ -95,14 +102,12 @@ export default function VerifyScreen({ navigation }: any) {
       // Capture "after" photo
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
-        skipProcessing: false,
+        skipProcessing: true,
       });
 
       if (!photo?.uri) return;
 
-      // ── Passive liveness (single frame texture check) ──────────────────
-      const passiveLiveness = await checkLiveness(photo.uri);
-      console.log('Passive liveness:', passiveLiveness);
+      // ── Passive liveness (single frame texture check) ──────────────────      const passiveLiveness = await checkLiveness(photo.uri);
 
       if (!passiveLiveness.isLive) {
         setStatus('failed');
@@ -117,7 +122,6 @@ export default function VerifyScreen({ navigation }: any) {
           beforePhotoUri.current,
           photo.uri,
         );
-        console.log('Active liveness:', activeLiveness);
 
         if (!activeLiveness.isLive) {
           setStatus('failed');

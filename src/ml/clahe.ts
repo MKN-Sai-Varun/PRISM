@@ -1,11 +1,3 @@
-/**
- * CLAHE — Contrast Limited Adaptive Histogram Equalization
- *
- * Normalises lighting on face crops before ML inference.
- * Addresses harsh outdoor sunlight, shadows, and low-light conditions
- * common in Indian field deployments.
- */
-
 export function applyCLAHE(
   imageData: Uint8Array,
   width:     number,
