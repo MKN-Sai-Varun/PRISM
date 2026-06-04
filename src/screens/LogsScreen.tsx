@@ -10,6 +10,11 @@ import {
   RefreshControl,
 } from 'react-native';
 import { colors } from '../utils/colors';
+import {
+  AttendancePeriod,
+  filterLogsByPeriod,
+  sortLogsNewestFirst,
+} from '../utils/attendance';
 import { getUnsyncedLogs } from '../db/sqlite';
 import { useAppStore } from '../store/appStore';
 
@@ -17,20 +22,19 @@ export default function LogsScreen({ navigation }: any) {
   const { attendanceLogs } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
+  const [period, setPeriod] = useState<AttendancePeriod>('day');
 
   const loadLogs = async () => {
     setRefreshing(true);
     await getUnsyncedLogs(); // ensure db is initialised
-    const sorted = [...attendanceLogs].sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-    setLogs(sorted);
+    const filteredLogs = filterLogsByPeriod(attendanceLogs, period);
+    setLogs(sortLogsNewestFirst(filteredLogs));
     setRefreshing(false);
   };
 
   useEffect(() => {
     loadLogs();
-  }, [attendanceLogs]);
+  }, [attendanceLogs, period]);
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -85,14 +89,36 @@ export default function LogsScreen({ navigation }: any) {
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Attendance Logs</Text>
-        <Text style={styles.count}>{logs.length} records</Text>
+        <Text style={styles.count}>{logs.length} {period}</Text>
+      </View>
+
+      <View style={styles.filterRow}>
+        {(['day', 'week', 'month'] as AttendancePeriod[]).map((item) => (
+          <TouchableOpacity
+            key={item}
+            style={[
+              styles.filterChip,
+              period === item && styles.filterChipActive,
+            ]}
+            onPress={() => setPeriod(item)}
+          >
+            <Text
+              style={[
+                styles.filterChipText,
+                period === item && styles.filterChipTextActive,
+              ]}
+            >
+              {item.charAt(0).toUpperCase() + item.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {logs.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>📋</Text>
-          <Text style={styles.emptyText}>No attendance logs yet</Text>
-          <Text style={styles.emptySubtext}>Verify someone to see logs here</Text>
+          <Text style={styles.emptyText}>No attendance logs for this {period}</Text>
+          <Text style={styles.emptySubtext}>Verify someone to see {period}-based logs here</Text>
         </View>
       ) : (
         <FlatList
@@ -128,6 +154,33 @@ const styles = StyleSheet.create({
   back: { color: colors.primary, fontSize: 16 },
   title: { color: colors.text, fontSize: 18, fontWeight: '700' },
   count: { color: colors.textMuted, fontSize: 13 },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterChipText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterChipTextActive: {
+    color: '#fff',
+  },
   list: { padding: 16, gap: 12 },
   logCard: {
     backgroundColor: colors.surface,

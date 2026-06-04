@@ -1,29 +1,27 @@
-/**
- * modelLoader.ts
- *
- * In standalone (preview/production) builds, Expo bundles assets under
- * an internal URI scheme that react-native-fast-tflite cannot open directly.
- * This module copies each model to the app's cache directory on first run
- * and returns a file:// URI that the native TFLite loader can open.
- */
-
-import * as FileSystem from 'expo-file-system';
+import { cacheDirectory, getInfoAsync, downloadAsync } from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 
 async function getModelUri(assetModule: number): Promise<string> {
-  // Load the asset to resolve its localUri
   const [asset] = await Asset.loadAsync(assetModule);
 
-  if (asset.localUri) {
+  console.log('Asset name:', asset.name);
+  console.log('Asset localUri:', asset.localUri);
+  console.log('Asset uri:', asset.uri);
+
+  if (asset.localUri && asset.localUri.startsWith('file://')) {
     return asset.localUri;
   }
 
-  // localUri is null in standalone builds — download to cache manually
-  const destUri = FileSystem.cacheDirectory + asset.name + '.' + asset.type;
+  const destUri = cacheDirectory + asset.name + '.tflite';
+  console.log('Dest URI:', destUri);
 
-  const info = await FileSystem.getInfoAsync(destUri);
+  const info = await getInfoAsync(destUri);
   if (!info.exists) {
-    await FileSystem.downloadAsync(asset.uri, destUri);
+    console.log('Downloading model to cache...');
+    await downloadAsync(asset.uri, destUri);
+    console.log('Download complete');
+  } else {
+    console.log('Model already cached');
   }
 
   return destUri;

@@ -111,7 +111,8 @@ export default function VerifyScreen({ navigation }: any) {
 
       if (!photo?.uri) return;
 
-      // ── Passive liveness (single frame texture check) ──────────────────      const passiveLiveness = await checkLiveness(photo.uri);
+      // ── Passive liveness (single frame texture check) ──────────────────
+      const passiveLiveness = await checkLiveness(photo.uri);
 
       if (!passiveLiveness.isLive) {
         setStatus('failed');

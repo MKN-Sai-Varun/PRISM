@@ -64,6 +64,15 @@ export async function getAllUsers(): Promise<any[]> {
   }));
 }
 
+export async function getAllAttendanceLogs(): Promise<any[]> {
+  const database = await getDB();
+  const rows = await database.getAllAsync('SELECT * FROM attendance ORDER BY timestamp DESC');
+  return (rows as any[]).map(log => ({
+    ...log,
+    synced: Boolean(log.synced),
+  }));
+}
+
 export async function logAttendance(
   id:         string,
   userId:     string,

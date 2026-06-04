@@ -9,11 +9,13 @@ import {
   Alert,
 } from 'react-native';
 import { colors } from '../utils/colors';
+import { filterTodayLogs } from '../utils/attendance';
 import { useAppStore } from '../store/appStore';
 import { syncAttendance, startAutoSync } from '../sync/awsSync';
 
 export default function HomeScreen({ navigation }: any) {
   const { enrolledUsers, attendanceLogs, isOnline } = useAppStore();
+  const todayLogs = filterTodayLogs(attendanceLogs);
 
   const hasSynced = useRef(false);
 
@@ -57,12 +59,12 @@ export default function HomeScreen({ navigation }: any) {
           <Text style={styles.statLabel}>Enrolled</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{attendanceLogs.length}</Text>
+          <Text style={styles.statNumber}>{todayLogs.length}</Text>
           <Text style={styles.statLabel}>Logs Today</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>
-            {attendanceLogs.filter((l) => !l.synced).length}
+            {todayLogs.filter((l) => !l.synced).length}
           </Text>
           <Text style={styles.statLabel}>Unsynced</Text>
         </View>
