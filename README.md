@@ -245,4 +245,4 @@ All components are open-source.
 
 ---
 
-*PRISM — NHAI Hackathon 7.0 — MKN Sai Varun, KMIT Hyderabad*
+*PRISM — NHAI Hackathon 7.0 — MKN Sai Varun*
