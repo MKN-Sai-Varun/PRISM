@@ -1,5 +1,5 @@
 # PRISM
-### Adaptive Biometric Mesh — Offline-First Facial Recognition for Field Personnel
+### Adaptive Biometric Mesh - Offline-First Facial Recognition for Field Personnel
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android%208.0%2B-brightgreen?style=flat-square" />
@@ -13,11 +13,11 @@
 
 ## Overview
 
-PRISM (Privacy-first Recognition and Intelligent Sync Mesh) is a fully offline biometric attendance system built for field personnel operating in remote locations — NHAI infrastructure sites, construction zones, and areas without reliable connectivity.
+PRISM (Privacy-first Recognition and Intelligent Sync Mesh) is a fully offline biometric attendance system built for field personnel operating in remote locations - NHAI infrastructure sites, construction zones, and areas without reliable connectivity.
 
 The core technical contribution is the **Adaptive Biometric Mesh (ABM)**: a dual-channel fusion pipeline that dynamically blends photometric face embeddings with lighting-invariant geometric facial ratios. Under harsh outdoor conditions (direct sunlight, deep shadows, abrupt exposure transitions), the ABM shifts trust toward the geometric channel to maintain accuracy where single-channel systems fail.
 
-Everything runs on-device. No internet connection is required for enrollment, verification, or logging. When connectivity is restored, attendance metadata is automatically synced to AWS — and no biometric data is ever transmitted.
+Everything runs on-device. No internet connection is required for enrollment, verification, or logging. When connectivity is restored, attendance metadata is automatically synced to AWS - and no biometric data is ever transmitted.
 
 ---
 
@@ -60,7 +60,7 @@ Minimum requirements: Android 8.0 (API 26) or above, 3 GB RAM.
 score = (cosine_rgb × w_rgb) + (cosine_geo × w_geo)
 ```
 
-The geometric channel encodes 12 normalised facial ratios from 468 landmark points — inter-ocular distance, jaw width, nose dimensions, lip width, cheekbone width, eye aspect ratios, symmetry, and more. These are invariant to scale, rotation, and illumination.
+The geometric channel encodes 12 normalised facial ratios from 468 landmark points - inter-ocular distance, jaw width, nose dimensions, lip width, cheekbone width, eye aspect ratios, symmetry, and more. These are invariant to scale, rotation, and illumination.
 
 ### Sync
 
@@ -90,12 +90,12 @@ All measurements on a mid-range Android device (3 GB RAM, CPU-only inference):
 |---|---|---|
 | Total verification latency (steady state) | ~806 ms | < 1,000 ms ✓ |
 | Total verification latency (peak / CPU contention) | ~1,300 ms | marginal |
-| BlazeFace detection | ~262 ms | — |
-| MobileFaceNet embedding | ~216 ms | — |
-| Liveness check | ~85 ms | — |
+| BlazeFace detection | ~262 ms | - |
+| MobileFaceNet embedding | ~216 ms | - |
+| Liveness check | ~85 ms | - |
 | Total model bundle size | 9.0 MB | < 20 MB ✓ |
-| Prototype match confidence (enrolled) | 85 – 95% | — |
-| APK size | 170 MB | — |
+| Prototype match confidence (enrolled) | 85 – 95% | - |
+| APK size | 170 MB | - |
 
 > Prototype match confidence is below the MobileFaceNet LFW benchmark of 99.28% due to JPEG encode-decode artefacts in the current preprocessing pipeline. Production deployment with a Vision Camera native frame processor would eliminate this cycle and recover approximately 3–5 percentage points.
 
@@ -123,7 +123,7 @@ PRISM/
 │       └── face_landmarker.task
 └── src/
     ├── screens/
-    │   ├── HomeScreen.tsx           Dashboard — enroll, verify, logs, sync
+    │   ├── HomeScreen.tsx           Dashboard - enroll, verify, logs, sync
     │   ├── EnrollScreen.tsx         3-capture face enrollment with averaging
     │   ├── VerifyScreen.tsx         Identity verification with liveness challenge
     │   └── LogsScreen.tsx           Attendance log viewer with sync status
@@ -165,7 +165,7 @@ npm install
 npx expo start --dev-client
 ```
 
-Open the Expo Go dev build on your Android device and scan the QR code shown in the terminal. The dev build APK must be installed first — download it from the Expo dashboard after running the initial development build.
+Open the Expo Go dev build on your Android device and scan the QR code shown in the terminal. The dev build APK must be installed first - download it from the Expo dashboard after running the initial development build.
 
 ### Build a Standalone APK
 
@@ -199,11 +199,11 @@ All dependencies are open-source and require no commercial licences.
 |---|---|
 | 1 | Copy `assets/models/` TFLite files into the Datalake 3.0 assets directory |
 | 2 | Add packages: `react-native-fast-tflite`, `react-native-nitro-modules`, `expo-image-manipulator`, `jpeg-js`, `expo-sqlite`, `expo-asset`, `expo-file-system`, `@react-native-community/netinfo` |
-| 3 | Copy `src/ml/` — self-contained, no circular dependencies, no external state |
+| 3 | Copy `src/ml/` - self-contained, no circular dependencies, no external state |
 | 4 | Copy `src/db/sqlite.ts` and `src/sync/awsSync.ts`; update `SYNC_ENDPOINT` in `awsSync.ts` |
-| 5 | Copy `src/screens/` — screens accept a `navigation` prop with `navigate()` and `goBack()`, compatible with React Navigation and custom navigators |
+| 5 | Copy `src/screens/` - screens accept a `navigation` prop with `navigate()` and `goBack()`, compatible with React Navigation and custom navigators |
 | 6 | Add `'tflite'` and `'task'` to `assetExts` in `metro.config.js` |
-| 7 | Run `eas build --platform android --profile preview` — required because `react-native-fast-tflite` is a native module |
+| 7 | Run `eas build --platform android --profile preview` - required because `react-native-fast-tflite` is a native module |
 
 ---
 
@@ -211,7 +211,7 @@ All dependencies are open-source and require no commercial licences.
 
 **iOS not built.** All JavaScript and TypeScript code is cross-platform compatible. An iOS build can be produced with `eas build --platform ios` given a macOS host and Apple Developer account.
 
-**JPEG preprocessing artefacts.** The current pipeline encodes captured frames to JPEG for resizing, then decodes them for inference. This lossy cycle reduces embedding quality. The recommended fix is a Vision Camera native frame processor for direct pixel buffer access — expected to recover ~3–5 percentage points of match accuracy.
+**JPEG preprocessing artefacts.** The current pipeline encodes captured frames to JPEG for resizing, then decodes them for inference. This lossy cycle reduces embedding quality. The recommended fix is a Vision Camera native frame processor for direct pixel buffer access - expected to recover ~3–5 percentage points of match accuracy.
 
 **Geometric channel not yet connected end-to-end.** The ABM geometric channel implementation in `geometricRatios.ts` and `fusionMatcher.ts` is complete, but the prototype enrolls with an empty geometric vector and falls back to RGB-only matching. Connecting the Face Landmarker output to the full fusion pipeline is the primary next development step.
 
@@ -245,4 +245,4 @@ All components are open-source.
 
 ---
 
-*PRISM — NHAI Hackathon 7.0 — MKN Sai Varun*
+*PRISM - NHAI Hackathon 7.0 - MKN Sai Varun*
